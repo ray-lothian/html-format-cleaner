@@ -1,27 +1,24 @@
 {
   "manifest_version": 2,
-  "version": "0.1.0",
-  "name": "HTML format cleaner",
-  "description": "right-click context-menu items to clear HTML formating and copy as plain text",
-
+  "version": "0.1.1",
+  "name": "PlainText - HTML Format Cleaner",
+  "description": "Right-click context-menu to clear HTML formating (remove HTML tags) and copy as plain text",
   "icons": {
     "16": "data/icons/16.png",
     "32": "data/icons/32.png",
     "48": "data/icons/48.png",
     "64": "data/icons/64.png",
     "128": "data/icons/128.png",
-    "256": "data/icons/256.png"
+    "256": "data/icons/256.png",
+    "512": "data/icons/512.png"
   },
-
   "permissions": [
     "contextMenus",
     "notifications",
     "storage",
     "*://*/*"
   ],
-
-  "homepage_url": "http://add0n.com/html-format-cleaner.html",
-
+  "homepage_url": "https://add0n.com/html-format-cleaner.html",
   "background": {
     "persistent": false,
     "scripts": [

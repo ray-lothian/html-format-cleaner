@@ -1,34 +1,19 @@
-/* globals safe */
 'use strict';
 
-var notify = message => chrome.notifications.create({
+const notify = message => chrome.notifications.create({
   title: chrome.runtime.getManifest().name,
   type: 'basic',
   iconUrl: 'data/icons/48.png',
   message
 });
 
-var storage = {};
+const storage = {};
 
-function tab() {
-  return new Promise((resolve, reject) => chrome.tabs.query({
-    active: true,
-    currentWindow: true
-  }, tabs => {
-    if (tabs && tabs.length) {
-      resolve(tabs[0]);
-    }
-    else {
-      reject(new Error('No active tab is detected'));
-    }
-  }));
-}
-
-function copy(str, tabId, msg) {
+function copy(str, msg) {
   if (/Firefox/.test(navigator.userAgent)) {
     const id = Math.random();
     storage[id] = str;
-    const run = tabId => chrome.tabs.executeScript(tabId, {
+    chrome.tabs.executeScript({
       allFrames: false,
       runAt: 'document_start',
       code: `
@@ -47,12 +32,6 @@ function copy(str, tabId, msg) {
     }, () => {
       notify(chrome.runtime.lastError ? 'Cannot copy to the clipboard on this page!' : msg);
     });
-    if (tabId) {
-      run(tabId);
-    }
-    else {
-      tab().then(tab => run(tab.id)).catch(e => notify(e.message));
-    }
   }
   else {
     document.oncopy = e => {
@@ -71,11 +50,11 @@ chrome.runtime.onMessage.addListener((request, sender, response) => {
   }
 });
 
-var replace = (str, tabId) => {
+const replace = (str, frameId) => {
   const id = Math.random();
   storage[id] = str;
-  chrome.tabs.executeScript(tabId, {
-    allFrames: true,
+  chrome.tabs.executeScript({
+    frameId,
     code: `{
       const selected = window.getSelection();
       const aElement = document.activeElement;
@@ -126,48 +105,40 @@ var replace = (str, tabId) => {
   chrome.runtime.onInstalled.addListener(callback);
   chrome.runtime.onStartup.addListener(callback);
 }
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener(info => {
   const method = info.menuItemId || '';
   const selected = info.selectionText;
   if (method === 'copy-plain') {
-    copy(selected, tab.id, 'Selected text is copied as plain text');
+    copy(selected, 'Selected text is copied as plain text');
   }
   else if (method === 'remove-formating') {
-    replace(selected, tab.id);
+    replace(selected, info.frameId);
   }
 });
 
-// FAQs & Feedback
-chrome.storage.local.get({
-  'version': null,
-  'faqs': navigator.userAgent.indexOf('Firefox') === -1,
-  'last-update': 0,
-}, prefs => {
-  const version = chrome.runtime.getManifest().version;
-
-  if (prefs.version ? (prefs.faqs && prefs.version !== version) : true) {
-    const now = Date.now();
-    const doUpdate = (now - prefs['last-update']) / 1000 / 60 / 60 / 24 > 30;
-    chrome.storage.local.set({
-      version,
-      'last-update': doUpdate ? Date.now() : prefs['last-update']
-    }, () => {
-      // do not display the FAQs page if last-update occurred less than 30 days ago.
-      if (doUpdate) {
-        const p = Boolean(prefs.version);
-        chrome.tabs.create({
-          url: chrome.runtime.getManifest().homepage_url + '?version=' + version +
-            '&type=' + (p ? ('upgrade&p=' + prefs.version) : 'install'),
-          active: p === false
-        });
-      }
-    });
-  }
-});
-
+/* FAQs & Feedback */
 {
-  const {name, version} = chrome.runtime.getManifest();
-  chrome.runtime.setUninstallURL(
-    chrome.runtime.getManifest().homepage_url + '?rd=feedback&name=' + name + '&version=' + version
-  );
+  const {management, runtime: {onInstalled, setUninstallURL, getManifest}, storage, tabs} = chrome;
+  if (navigator.webdriver !== true) {
+    const page = getManifest().homepage_url;
+    const {name, version} = getManifest();
+    onInstalled.addListener(({reason, previousVersion}) => {
+      management.getSelf(({installType}) => installType === 'normal' && storage.local.get({
+        'faqs': true,
+        'last-update': 0
+      }, prefs => {
+        if (reason === 'install' || (prefs.faqs && reason === 'update')) {
+          const doUpdate = (Date.now() - prefs['last-update']) / 1000 / 60 / 60 / 24 > 45;
+          if (doUpdate && previousVersion !== version) {
+            tabs.create({
+              url: page + '?version=' + version + (previousVersion ? '&p=' + previousVersion : '') + '&type=' + reason,
+              active: reason === 'install'
+            });
+            storage.local.set({'last-update': Date.now()});
+          }
+        }
+      }));
+    });
+    setUninstallURL(page + '?rd=feedback&name=' + encodeURIComponent(name) + '&version=' + version);
+  }
 }

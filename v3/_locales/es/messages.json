@@ -1,0 +1,5 @@
+{
+  "description": {
+    "message": "Borra los formatos HTML como la negrita, la cursiva y los colores de primer plano y de fondo, y luego cópialos como texto sin formato o reemplaza el nodo"
+  }
+}
