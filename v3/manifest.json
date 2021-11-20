@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "version": "0.2.0",
-  "name": "Coy as Plain Text - Format Cleaner",
+  "version": "0.2.2",
+  "name": "Copy as Plain Text - Format Cleaner",
   "description": "__MSG_description__",
   "default_locale": "en",
   "icons": {

@@ -4,23 +4,45 @@
 {
   const callback = () => {
     chrome.contextMenus.create({
-      id: 'remove-formating',
-      title: 'Remove Formating',
+      id: 'copy-plain',
+      title: 'Copy plain text to the clipboard',
       contexts: ['selection']
     });
     chrome.contextMenus.create({
-      id: 'copy-plain',
-      title: 'Copy plain text to the clipboard',
+      id: 'remove-formating',
+      title: 'Remove Formating',
       contexts: ['selection']
     });
   };
   chrome.runtime.onInstalled.addListener(callback);
   chrome.runtime.onStartup.addListener(callback);
 }
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const method = info.menuItemId || '';
-  const selected = info.selectionText;
+  let selected = info.selectionText;
+
+  // get selected text
+  const a = await chrome.scripting.executeScript({
+    target: {
+      tabId: tab.id,
+      frameIds: [info.frameId]
+    },
+    func: () => window.getSelection().toString().trim()
+  }).catch(e => {
+    console.warn('cannot use window.getSelection()', e);
+    return;
+  });
+  if (a && a.length && a[0].result) {
+    selected = a[0].result;
+  }
+
   if (method === 'copy-plain') {
+    await chrome.tabs.update(tab.id, {
+      highlighted: true
+    });
+    await chrome.windows.update(tab.windowId, {
+      focused: true
+    });
     chrome.scripting.executeScript({
       target: {
         tabId: tab.id
@@ -44,7 +66,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
       func: str => {
         const selected = window.getSelection();
         const aElement = document.activeElement;
-        console.log(1);
+
         if (selected && selected.rangeCount) {
           const run = document.execCommand('insertText', null, str);
           if (run === false) {
