@@ -1,33 +1,33 @@
 {
   "manifest_version": 3,
-  "version": "0.2.2",
+  "version": "0.2.4",
   "name": "Copy as Plain Text - Format Cleaner",
   "description": "__MSG_description__",
   "default_locale": "en",
   "icons": {
-    "16": "data/icons/16.png",
-    "32": "data/icons/32.png",
-    "48": "data/icons/48.png",
-    "64": "data/icons/64.png",
-    "128": "data/icons/128.png",
-    "256": "data/icons/256.png",
-    "512": "data/icons/512.png"
+    "16": "/data/icons/16.png",
+    "32": "/data/icons/32.png",
+    "48": "/data/icons/48.png",
+    "64": "/data/icons/64.png",
+    "128": "/data/icons/128.png",
+    "256": "/data/icons/256.png",
+    "512": "/data/icons/512.png"
   },
   "permissions": [
     "contextMenus",
     "storage",
-    "scripting"
+    "scripting",
+    "activeTab"
   ],
-  "host_permissions": [
-    "*://*/*"
-  ],
-  "homepage_url": "https://add0n.com/html-format-cleaner.html",
+  "homepage_url": "https://webextension.org/listing/html-format-cleaner.html",
   "background": {
-    "service_worker": "worker.js"
+    "service_worker": "worker.js",
+    "scripts": ["worker.js"]
   },
-  "commands": {
-    "_execute_action": {
-      "description": "Press the action button"
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{cd747f55-9587-437c-b67b-1efb529e0274}",
+      "strict_min_version": "128.0"
     }
   }
 }

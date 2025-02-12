@@ -1,71 +1,101 @@
 'use strict';
 
+const notify = async message => {
+  const url = '/data/alert/index.html?message=' + encodeURIComponent(message);
+
+  const win = await chrome.windows.getCurrent();
+
+  const prefs = await chrome.storage.local.get({
+    width: 600,
+    height: 200
+  });
+  const left = win.left + Math.round((win.width - prefs.width) / 2);
+  const top = win.top + Math.round((win.height - prefs.height) / 2);
+
+  chrome.windows.create({
+    url,
+    width: prefs.width,
+    height: prefs.height,
+    left,
+    top,
+    type: 'popup'
+  });
+};
+
 // Context Menu
 {
-  const callback = () => {
+  const startup = () => {
+    if (startup.once) {
+      return;
+    }
+    startup.once = true;
+
     chrome.contextMenus.create({
       id: 'copy-plain',
       title: 'Copy plain text to the clipboard',
-      contexts: ['selection']
-    });
+      contexts: ['selection'],
+      documentUrlPatterns: ['*://*/*']
+    }, () => chrome.runtime.lastError);
     chrome.contextMenus.create({
-      id: 'remove-formating',
-      title: 'Remove Formating',
-      contexts: ['selection']
-    });
+      id: 'remove-formatting',
+      title: 'Remove formatting',
+      contexts: ['selection'],
+      documentUrlPatterns: ['*://*/*']
+    }, () => chrome.runtime.lastError);
   };
-  chrome.runtime.onInstalled.addListener(callback);
-  chrome.runtime.onStartup.addListener(callback);
+  chrome.runtime.onInstalled.addListener(startup);
+  chrome.runtime.onStartup.addListener(startup);
 }
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  const method = info.menuItemId || '';
-  let selected = info.selectionText;
-
-  // get selected text
-  const a = await chrome.scripting.executeScript({
-    target: {
-      tabId: tab.id,
-      frameIds: [info.frameId]
-    },
-    func: () => window.getSelection().toString().trim()
-  }).catch(e => {
-    console.warn('cannot use window.getSelection()', e);
-    return;
-  });
-  if (a && a.length && a[0].result) {
-    selected = a[0].result;
-  }
+  const method = info.menuItemId;
 
   if (method === 'copy-plain') {
-    await chrome.tabs.update(tab.id, {
-      highlighted: true
-    });
-    await chrome.windows.update(tab.windowId, {
-      focused: true
-    });
-    chrome.scripting.executeScript({
-      target: {
-        tabId: tab.id
-      },
-      func: msg => {
-        navigator.clipboard.writeText(msg).then(() => {
-          const t = document.title;
-          document.title = 'Selected text is copied as plain text';
-          setTimeout(() => document.title = t, 750);
-        }).catch(e => alert(e.message));
-      },
-      args: [selected]
-    });
+    try {
+      await chrome.tabs.update(tab.id, {
+        highlighted: true
+      });
+      await chrome.windows.update(tab.windowId, {
+        focused: true
+      });
+      await chrome.scripting.executeScript({
+        target: {
+          tabId: tab.id
+        },
+        func: msg => {
+          msg = getSelection().toString().trim() || msg;
+
+          window.focus();
+          navigator.clipboard.writeText(msg).then(() => {
+            const t = document.title;
+            document.title = 'Done!';
+            setTimeout(() => document.title = t, 750);
+          }).catch(e => alert(e.message));
+        },
+        args: [info.selectionText],
+        injectImmediately: true
+      });
+    }
+    catch (e) {
+      try {
+        // Firefox backup plan
+        await navigator.clipboard.writeText(info.selectionText);
+      }
+      catch (ee) {
+        notify(e.message);
+        console.error(e);
+      }
+    }
   }
-  else if (method === 'remove-formating') {
+  else if (method === 'remove-formatting') {
     chrome.scripting.executeScript({
       target: {
         tabId: tab.id,
         frameIds: [info.frameId]
       },
       func: str => {
-        const selected = window.getSelection();
+        const selected = getSelection();
         const aElement = document.activeElement;
+        str = selected.toString() || str;
 
         if (selected && selected.rangeCount) {
           const run = document.execCommand('insertText', null, str);
@@ -85,17 +115,18 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           });
         }
       },
-      args: [selected]
+      args: [info.selectionText],
+      injectImmediately: true
     }).catch(e => {
-      console.warn(e);
-      chrome.scripting.executeScript({
-        target: {
-          tabId: tab.id
-        },
-        func: str => alert(str),
-        args: [e.message]
-      });
+      notify(e.message);
+      console.error(e);
     });
+  }
+});
+
+chrome.runtime.onMessage.addListener((request, sender) => {
+  if (request.method === 'close') {
+    chrome.tabs.remove(sender.tab.id);
   }
 });
 
@@ -103,8 +134,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 {
   const {management, runtime: {onInstalled, setUninstallURL, getManifest}, storage, tabs} = chrome;
   if (navigator.webdriver !== true) {
-    const page = getManifest().homepage_url;
-    const {name, version} = getManifest();
+    const {homepage_url: page, name, version} = getManifest();
     onInstalled.addListener(({reason, previousVersion}) => {
       management.getSelf(({installType}) => installType === 'normal' && storage.local.get({
         'faqs': true,
@@ -113,7 +143,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         if (reason === 'install' || (prefs.faqs && reason === 'update')) {
           const doUpdate = (Date.now() - prefs['last-update']) / 1000 / 60 / 60 / 24 > 45;
           if (doUpdate && previousVersion !== version) {
-            tabs.query({active: true, currentWindow: true}, tbs => tabs.create({
+            tabs.query({active: true, lastFocusedWindow: true}, tbs => tabs.create({
               url: page + '?version=' + version + (previousVersion ? '&p=' + previousVersion : '') + '&type=' + reason,
               active: reason === 'install',
               ...(tbs && tbs.length && {index: tbs[0].index + 1})
